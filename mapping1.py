@@ -14,6 +14,7 @@ import cookielib, urllib2
 ## dependency:
 import poster
 import pygal as pg
+import pandas
 
 def read_indel(fn):
 	'''read indels from .indel file into a list of Indels'''
@@ -117,6 +118,33 @@ def mapping(indel_fn, annotation_fn='knownGenes.txt'):
 			c += 1
 	return genes_indel, a, b, c, d
 
+def normalizer(a, b, c, d,annotation_fn='knownGenes.txt'):
+        genes = load_annotations(annotation_fn)
+        for gene in genes:
+                print >>sys.sterrd,"tot_genomesize: %s" %(gene.genomesize)
+                tot_genomesize = gene.genomesize
+                tot_genesize = gene.genesize.sum
+                tot_cdsize = gene.cdsize.sum
+                tot_exonsize = gene.exonsize.sum
+                tot_intergenic = gene.genomesize - tot_genesize
+                tot_noncdsize = tot_genesize - tot_cdsize
+                tot_intronsize = tot_cdsize - tot_exonsize
+                fra_genesize = totgenesize / tot_genomesize
+                fra_intergenic = tot_intergeic / tot_genomesize
+                fra_cds = tot_cdsize / tot_genomesize
+                fra_exonsize = tot_exonsize / tot_genomesize
+                fra_noncdsize = tot_noncdsize / tot_genomesize
+                fra_intronsize = tot_intronsize / tot_genomesize
+                normalized_intergenic = ((a-b)/a) /fra_intergenic
+                normalized_genesize = b / fra_genesize
+                normalized_noncdsize = ((b-c)/a) / fra_noncdsize
+                normalized_exonsize = (d/a) / fra_exonsize
+                normalized_intronsize = ((c-d)/a) / fra_intronsize
+        return  normalized_intergenic, normalized_genesize, normalized_noncdsize, normalized_exonsize, normalized_intronsize
+
+
+
+
 def format_gene_sets(genes_indel):
 	"""convert the genes_indel dictionary to a gene-set library format"""
 	d_term_genes = {}
@@ -183,9 +211,10 @@ def genomic_distribution(indel_fn):
 def plot_pie(a, b, c, d):
         print >>sys.stderr, "a: %s, b: %s, c: %s, d: %s" %(a, b, c, d)
 	a = float(a)
+	intergenic = 100*(a-b)/a
 	pie_chart = pg.Pie()
 	pie_chart.title = 'Indels mapped to genomic elements (in %)'
-	pie_chart.add('Intergenic', 100*(a-b)/a)
+	pie_chart.add('Intergenic', intergenic)
 	pie_chart.add('Gene (non-coding region)', 100*(b-c)/a)
 	pie_chart.add('Exon', 100*d/a)
 	pie_chart.add('Intron', 100*(c-d)/a)
@@ -206,7 +235,7 @@ def plot_bars(c_chroms_i, c_chroms_d):
 	bar_plot.render_to_file('chromosome_distribution.svg')
 	return
 
-def write_output(indel_fn, d_term_genes, a, b, c, d):
+def write_output(indel_fn, d_term_genes, a, b, c, d, normalized_intergenic, normalized_genesize, normalized_noncdsize, normalized_exonsize, normalized_intronsize):
 	"""write the running infomation and results into a txt file"""
 	outfn = indel_fn[0:-6] + '.out'
 	with open (outfn, 'w') as out:
@@ -217,6 +246,11 @@ def write_output(indel_fn, d_term_genes, a, b, c, d):
 		out.write('INDELs mapped to genes: %s\n'%b)
 		out.write('INDELs mapped to CDS: %s\n'%c)
 		out.write('INDELs mapped to exons: %s\n'%d)
+		out.write('Relative enrichment in intergenic region:%s\n'%normalized_intergenic)
+		out.write('Relative enrichment in gene:%s\n'%normalized_genesize)
+		out.write('Relative enrichment in non-coding region:%s\n'%normalized_noncdsize)
+                out.write('Relative enrichment in exonic region:%s\n'%normalized_exonsize)
+                out.write('Relative enrichment in intronic region:%s\n'%normalized_intronsize)
 		out.write('\n')
 		## write Enrichr links:
 		out.write('Enrichment analysis for INDELs affected genes: \n')
@@ -227,7 +261,7 @@ def write_output(indel_fn, d_term_genes, a, b, c, d):
 			out.write(term + ':\t' + link + '\n')
 	return
 
-def output_wraper(indel_fn, d_term_genes, a, b, c, d):
+def output_wraper(indel_fn, d_term_genes, a, b, c, d, normalized_intergenic, normalized_genesize, normalized_noncdsize, normalized_exonsize, normalized_intronsize):
 	c_chroms_i, c_chroms_d = genomic_distribution(indel_fn)
 	try:
 		os.mkdir('output')
@@ -235,7 +269,7 @@ def output_wraper(indel_fn, d_term_genes, a, b, c, d):
                 print >>sys.stderr, "was not able to create directory, output"
 		pass
 	os.chdir('./output')
-	write_output(indel_fn, d_term_genes, a, b, c, d)
+	write_output(indel_fn, d_term_genes, a, b, c, d,normalized_intergenic, normalized_genesize, normalized_noncdsize, normalized_exonsize, normalized_intronsize)
 	d2gmt(d_term_genes, 'genes_affected_by_indels.gmt')
 	plot_pie(a, b, c, d)
 	plot_bars(c_chroms_i, c_chroms_d)
@@ -261,7 +295,7 @@ def main():
 	genes_indel, a, b, c, d = mapping(indel_fn, annotation_fn=annotation_fn)
 	d_term_genes = format_gene_sets(genes_indel)
 	## output results:
-	output_wraper(indel_fn, d_term_genes, a, b, c, d)
+	output_wraper(indel_fn, d_term_genes, a, b, c, d, normalized_intergenic, normalized_genesize, normalized_noncdsize, normalized_exonsize, normalized_intronsize)
 	end_time = dt.datetime.now()
 	print end_time
 	print 'time elapsed: ', end_time - start_time
